@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EuroMillions Draw Watch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { margin:0; font-family: -apple-system, system-ui, sans-serif; background:#0b0d1a; color:#eee; }
+  header { padding:20px 24px 8px; }
+  h1 { margin:0; font-size:20px; font-weight:600; }
+  .sub { color:#8a8fb0; font-size:13px; margin-top:4px; }
+  main { padding:16px 24px 40px; max-width:960px; }
+  .card { background:#151832; border-radius:12px; padding:18px; margin-bottom:16px; }
+  .label { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#8a8fb0; }
+  .countdown { font-size:34px; font-variant-numeric:tabular-nums; margin-top:6px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .ball { width:58px; height:58px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+          font-size:22px; font-weight:700; color:#111; background:#e7e9f5; box-shadow:inset -6px -8px 14px rgba(0,0,0,.25);
+          transform:scale(.2); opacity:0; transition:transform .5s cubic-bezier(.2,1.6,.4,1), opacity .4s; }
+  .ball.main { background:#ffd34d; }
+  .ball.star { background:#c79bff; width:50px; height:50px; font-size:19px; }
+  .ball.show { transform:scale(1); opacity:1; }
+  .ball.hit { outline:3px solid #36e39a; }
+  .ball.miss { opacity:.45; }
+  .pill { display:inline-block; padding:4px 10px; border-radius:999px; background:#22264a; font-size:13px; margin-right:6px; }
+  .ok { color:#36e39a; } .wait { color:#ffb84d; }
+  video { width:100%; border-radius:10px; background:#000; }
+  button { background:#2a2f5c; color:#eee; border:0; border-radius:8px; padding:8px 14px; cursor:pointer; margin-right:8px; }
+  .muted { color:#8a8fb0; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EuroMillions Draw Watch</h1>
+  <div class="sub">Target 09 11 17 33 45 · Stars 08 10 · Draw Fri 23 Oct 2026, 20:15 London</div>
+</header>
+<main>
+
+  <section class="card">
+    <div class="label">Time to draw</div>
+    <div class="countdown" id="countdown">--</div>
+    <div class="muted" id="gen">loading status…</div>
+  </section>
+
+  <section class="card">
+    <div class="label">Latest result <span id="resultState" class="wait">(waiting for draw)</span></div>
+    <div class="row" id="resultMain"></div>
+    <div class="row" id="resultStars"></div>
+    <div style="margin-top:12px" id="matchInfo" class="muted"></div>
+    <div style="margin-top:12px">
+      <button id="replay">Replay reveal</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="label">Draw broadcast video</div>
+    <div class="muted" style="margin:6px 0 10px">Paste the official draw video URL (YouTube/MP4) to show the broadcast.</div>
+    <input id="videoUrl" placeholder="https://… (mp4 or embed URL)" style="width:70%;padding:8px;border-radius:8px;border:0;background:#22264a;color:#eee">
+    <button id="loadVideo">Load</button>
+    <div style="margin-top:12px" id="videoBox"></div>
+  </section>
+
+</main>
+<script>
+const TARGET = { main: [9,11,17,33,45], stars: [8,10] };
+const DRAW_ISO = "2026-10-23T20:15:00+01:00";
+const POLL_MS = 30000;
+let lastRevealKey = "";
+
+const pad = n => String(n).padStart(2,"0");
+
+function ballEl(n, cls) {
+  const d = document.createElement("div");
+  d.className = "ball " + cls;
+  d.textContent = pad(n);
+  return d;
+}
+
+function reveal(containerId, nums, cls, hits) {
+  const box = document.getElementById(containerId);
+  box.innerHTML = "";
+  const els = nums.map(n => {
+    const b = ballEl(n, cls);
+    if (hits && hits.has(n)) b.classList.add("hit");
+    else if (hits) b.classList.add("miss");
+    box.appendChild(b);
+    return b;
+  });
+  els.forEach((b, i) => setTimeout(() => b.classList.add("show"), 350 * i + 50));
+}
+
+function revealAll(official) {
+  const mainHits = new Set(official.main.filter(n => TARGET.main.includes(n)));
+  const starHits = new Set(official.stars.filter(n => TARGET.stars.includes(n)));
+  reveal("resultMain", official.main, "main", mainHits);
+  setTimeout(() => reveal("resultStars", official.stars, "star", starHits), 350 * official.main.length + 400);
+}
+
+function renderCountdown(secs, reached) {
+  const el = document.getElementById("countdown");
+  if (reached) { el.textContent = "Draw time reached"; return; }
+  const d = Math.floor(secs/86400), h = Math.floor(secs%86400/3600),
+        m = Math.floor(secs%3600/60), s = secs%60;
+  el.textContent = `${d}d ${pad(h)}h ${pad(m)}m ${pad(s)}s`;
+}
+
+let tick = null;
+function startTicking(secsAtFetch) {
+  const t0 = Date.now();
+  clearInterval(tick);
+  tick = setInterval(() => {
+    const left = Math.max(0, secsAtFetch - Math.floor((Date.now()-t0)/1000));
+    renderCountdown(left, left === 0);
+  }, 1000);
+}
+
+async function poll() {
+  try {
+    const r = await fetch("status.json?t=" + Date.now(), { cache: "no-store" });
+    const s = await r.json();
+    document.getElementById("gen").textContent = "updated " + new Date(s.generated_at).toLocaleTimeString();
+    startTicking(s.seconds_to_draw);
+
+    const pub = s.latest_published;
+    // Only treat the published result as "tonight's" once the draw time has passed.
+    if (s.draw_reached && pub) {
+      const key = pub.main.join(",") + "|" + pub.stars.join(",");
+      document.getElementById("resultState").textContent = "(from " + pub.source + ")";
+      document.getElementById("resultState").className = "ok";
+      document.getElementById("matchInfo").textContent =
+        `Matched main ${pub.matched_main}/5 · stars ${pub.matched_stars}/2 · ${pub.prize_category}`;
+      if (key !== lastRevealKey) { lastRevealKey = key; revealAll(pub); }
+    } else {
+      document.getElementById("resultState").textContent = "(waiting for draw)";
+      document.getElementById("resultState").className = "wait";
+      document.getElementById("resultMain").innerHTML = "";
+      document.getElementById("resultStars").innerHTML = "";
+      document.getElementById("matchInfo").textContent = "";
+    }
+  } catch (e) {
+    document.getElementById("gen").textContent = "status.json unavailable — is frontend_export.py running?";
+  }
+}
+
+document.getElementById("replay").onclick = () => {
+  fetch("status.json?t=" + Date.now(), { cache: "no-store" }).then(r => r.json()).then(s => {
+    if (s.latest_published) revealAll(s.latest_published);
+  });
+};
+
+document.getElementById("loadVideo").onclick = () => {
+  const url = document.getElementById("videoUrl").value.trim();
+  const box = document.getElementById("videoBox");
+  box.innerHTML = "";
+  if (!url) return;
+  if (/\.(mp4|webm|mov)(\?|$)/i.test(url)) {
+    const v = document.createElement("video"); v.src = url; v.controls = true; box.appendChild(v);
+  } else if (/youtube\.com|youtu\.be/.test(url)) {
+    const id = (url.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/) || [])[1];
+    if (!id) { box.textContent = "Could not parse YouTube ID."; return; }
+    const f = document.createElement("iframe");
+    f.src = "https://www.youtube.com/embed/" + id; f.width = "100%"; f.height = "360";
+    f.allow = "encrypted-media; picture-in-picture"; f.allowFullscreen = true;
+    box.appendChild(f);
+  } else {
+    box.textContent = "Use a direct .mp4/.webm URL or a YouTube link.";
+  }
+};
+
+poll();
+setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>
