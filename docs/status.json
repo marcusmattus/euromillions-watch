@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-10-23T16:08:04+00:00",
+  "generated_at": "2026-10-23T16:29:14+00:00",
   "draw_time": "2026-10-23T20:15:00+01:00",
   "draw_reached": false,
-  "seconds_to_draw": 11215,
+  "seconds_to_draw": 9945,
   "target": {
     "main": [
       9,
@@ -16,21 +16,5 @@
       10
     ]
   },
-  "latest_published": {
-    "main": [
-      9,
-      15,
-      16,
-      37,
-      43
-    ],
-    "stars": [
-      7,
-      10
-    ],
-    "source": "euromillions.com",
-    "matched_main": 1,
-    "matched_stars": 1,
-    "prize_category": "No prize"
-  }
+  "latest_published": null
 }
