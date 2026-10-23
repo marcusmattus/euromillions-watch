@@ -24,7 +24,7 @@ status = {
     "target": {"main": MAIN, "stars": STARS},
     "latest_published": official,
 }
-os.makedirs("site", exist_ok=True)
+os.makedirs("docs", exist_ok=True)
 with open("docs/status.json", "w") as f:
     json.dump(status, f, indent=2)
 print(json.dumps({k: status[k] for k in ("generated_at", "draw_reached", "seconds_to_draw")}))
