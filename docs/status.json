@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-28T11:52:20+00:00",
+  "generated_at": "2026-10-28T12:01:09+00:00",
   "draw_time": "2026-10-23T20:15:00+01:00",
   "draw_reached": true,
   "seconds_to_draw": 0,
@@ -16,21 +16,5 @@
       10
     ]
   },
-  "latest_published": {
-    "main": [
-      21,
-      30,
-      32,
-      42,
-      48
-    ],
-    "stars": [
-      3,
-      6
-    ],
-    "source": "euromillions.com",
-    "matched_main": 0,
-    "matched_stars": 0,
-    "prize_category": "No prize"
-  }
+  "latest_published": null
 }
